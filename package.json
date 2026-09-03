@@ -1,0 +1,15 @@
+{
+  "name": "rubric-x402-screen",
+  "version": "0.1.0",
+  "description": "Screen the wallets that pay your x402 endpoints against OFAC. Free, local, sub-millisecond. Optionally anchor each screening as permanent evidence.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "scripts": { "build": "tsc" },
+  "keywords": ["x402", "ofac", "sanctions", "screening", "compliance", "agent-payments", "attestation"],
+  "author": "Echelon Intelligence Group LLC",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/0xsims/rubric-x402-screen" },
+  "devDependencies": { "typescript": "^5.5.0", "@types/node": "^20.0.0" }
+}
