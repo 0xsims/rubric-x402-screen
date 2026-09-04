@@ -12,6 +12,7 @@
 const LIST_URL = "https://rubric-protocol.com/data/ofac-addresses.json";
 const ATTEST_URL = "https://rubric-protocol.com/v1/tiered-attest";
 const ATTEST_X402_URL = "https://rubric-protocol.com/v1/x402/tiered-attest";
+const SCREEN_NAME_URL = "https://rubric-protocol.com/v1/x402/attested-screening";
 const LIST_TTL_MS = 30 * 60 * 1000;
 
 export interface ScreenResult {
@@ -99,6 +100,60 @@ async function attestWithKey(result: ScreenResult, opts: { apiKey: string; agent
     verifyUrl: j.attestationId ? `https://rubric-protocol.com/v1/verify/${j.attestationId}` : null,
     significance: "Anchored proof that this screening was performed at this time, verifiable by anyone without trusting you.",
   };
+}
+
+export interface NameScreenResult {
+  success: boolean;
+  matchCount: number;
+  nearMissCount?: number;
+  results?: Record<string, { matches: number; entries?: any[] }>;
+  matchRule?: { id: string; [k: string]: any };
+  listVersion?: string;
+  queryHash?: string;
+  methodology?: string;
+  attestationId?: string | null;
+  verifyUrl?: string | null;
+  /** Fuzzy screening returns CANDIDATES for human adjudication, never determinations. */
+  adjudicationRequired: true;
+}
+
+/**
+ * Screen a name or entity against six sanctions and export-control lists:
+ * OFAC SDN and Consolidated (primary and alternate spellings), UN Security
+ * Council, UK OFSI, EU, and BIS Denied Persons.
+ *
+ * Unlike address screening this is a paid, server-side call: the lists are large
+ * and the matching is fuzzy (screen-match-v2.2, Damerau-Levenshtein with a
+ * documented token rule). $0.01 over x402, or use a Rubric API key.
+ *
+ * IMPORTANT: matches are candidates requiring human adjudication, not
+ * determinations that a party is listed. Absence of a match is evidence the rule
+ * was applied to this query against these list versions - it is not legal
+ * clearance, and it is not a compliance program.
+ */
+export async function screenName(
+  name: string,
+  opts: { apiKey?: string; payment?: string; queryId?: string } = {}
+): Promise<NameScreenResult | { paymentRequired: true; challenge: any; how: string }> {
+  const body = JSON.stringify({ name, queryId: opts.queryId });
+  if (opts.apiKey) {
+    const r = await fetch("https://rubric-protocol.com/v1/attested-screening", {
+      method: "POST", headers: { "Content-Type": "application/json", "x-api-key": opts.apiKey }, body,
+    });
+    const j: any = await r.json().catch(() => ({}));
+    return { ...j, adjudicationRequired: true,
+             verifyUrl: j.attestationId ? `https://rubric-protocol.com/v1/verify/${j.attestationId}` : null };
+  }
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.payment) { headers["PAYMENT-SIGNATURE"] = opts.payment; headers["X-PAYMENT"] = opts.payment; }
+  const r = await fetch(SCREEN_NAME_URL, { method: "POST", headers, body });
+  const j: any = await r.json().catch(() => ({}));
+  if (r.status === 200 && j.success) {
+    return { ...j, adjudicationRequired: true,
+             verifyUrl: j.attestationId ? `https://rubric-protocol.com/v1/verify/${j.attestationId}` : null };
+  }
+  return { paymentRequired: true, challenge: j,
+           how: "Sign this x402 payment ($0.01 USDC on Base) and call screenName again with { payment }. No account required." };
 }
 
 /** Express/Hono-style middleware. Screens the payer from the x402 payment header. */

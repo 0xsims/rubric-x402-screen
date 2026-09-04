@@ -41,6 +41,32 @@ Or skip the account entirely and pay per attestation over x402 (half a cent, no 
 
 Free API key at https://rubric-protocol.com — 1,000 anchored screenings a month.
 
+## Name and entity screening (paid)
+
+Address matching catches wallets on OFAC's published list. It does not catch a sanctioned person using an unlisted wallet. For that you screen the name.
+
+    import { screenName } from "rubric-x402-screen";
+
+    const challenge = await screenName("Acme Trading Ltd");        // x402 payment challenge
+    const result = await screenName("Acme Trading Ltd", { payment }); // signed payment -> result
+    // or with an account: screenName("Acme Trading Ltd", { apiKey })
+
+Screens six lists: OFAC SDN and Consolidated including alternate spellings, UN Security Council, UK OFSI, EU, and BIS Denied Persons. One cent over x402, no account required.
+
+Every response discloses the matching rule in full (screen-match-v2.2: Damerau-Levenshtein token matching with a documented edit budget, one-to-one token assignment, at most one query-side initial expansion), the exact source files and their SHA-256 hashes, the list version screened, and the match type and edit distance for every hit.
+
+### This returns candidates, not determinations
+
+A fuzzy name match is a candidate requiring human adjudication. It is not a finding that a party is listed. Absence of a match is evidence that this rule was applied to this query against these list versions at this time; it is not legal clearance, and a spelling more than one edit from every listed form will not match.
+
+## What this is and is not
+
+Free and local: address screening. Exact matching, no network call, no key.
+
+Paid API: name screening, and anchoring any screening as evidence.
+
+Neither is a compliance program. This library performs screening checks. A sanctions compliance program also requires risk assessment, adjudication and escalation procedures, blocking and reporting obligations, testing, training, and management oversight. If you have real sanctions exposure, you need more than a library. Most x402 sellers currently check nothing at all, and going from nothing to this is the cheapest risk reduction available.
+
 ## Data source and your responsibility
 
 The address list is a convenience mirror of the public OFAC SDN digital-currency address list, parsed from treasury.gov/ofac/downloads/sanctions/1.0/sdn_advanced.xml and refreshed every six hours. Every response carries the source URL, the source file SHA-256, and the fetch time so you can verify against the original.
