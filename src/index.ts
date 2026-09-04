@@ -16,6 +16,7 @@ const SCREEN_NAME_URL = "https://rubric-protocol.com/v1/x402/attested-screening"
 const LIST_TTL_MS = 30 * 60 * 1000;
 
 export interface ScreenResult {
+  listUnavailable?: boolean;
   address: string;
   clear: boolean;
   ofacMatch: boolean;
@@ -33,20 +34,36 @@ interface ListPayload {
 
 let cache: { at: number; set: Map<string, string>; meta: ListPayload } | null = null;
 
-async function loadList(url = LIST_URL): Promise<NonNullable<typeof cache>> {
+async function loadList(url = LIST_URL): Promise<typeof cache> {
   if (cache && Date.now() - cache.at < LIST_TTL_MS) return cache;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`sanctions list fetch failed: ${r.status}`);
-  const meta = (await r.json()) as ListPayload;
-  const set = new Map<string, string>();
-  for (const a of meta.addresses || []) set.set(String(a.address).toLowerCase(), a.chain);
-  cache = { at: Date.now(), set, meta };
-  return cache;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`sanctions list fetch failed: ${r.status}`);
+    const meta = (await r.json()) as ListPayload;
+    const set = new Map<string, string>();
+    for (const a of meta.addresses || []) set.set(String(a.address).toLowerCase(), a.chain);
+    cache = { at: Date.now(), set, meta };
+    return cache;
+  } catch {
+    if (cache) return cache; // refresh failed: serve last-known list
+    return null;             // no list has ever loaded: caller fails open with disclosure
+  }
 }
 
 /** Screen one address. Local, sub-millisecond after the first list load. */
 export async function screenPayer(address: string, opts: { listUrl?: string } = {}): Promise<ScreenResult> {
-  const { set, meta } = await loadList(opts.listUrl);
+  const list = await loadList(opts.listUrl);
+  if (!list) {
+    return {
+      address,
+      clear: true,
+      ofacMatch: false,
+      listUnavailable: true,
+      screenedAt: new Date().toISOString(),
+      disclaimer: "Sanctions list unreachable at screening time. This address was NOT screened. Failing open per documented design.",
+    } as unknown as ScreenResult;
+  }
+  const { set, meta } = list;
   const key = String(address).toLowerCase();
   const hit = set.get(key);
   return {

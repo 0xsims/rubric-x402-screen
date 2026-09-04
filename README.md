@@ -20,7 +20,7 @@ If you sell an x402 service and a sanctioned wallet pays you, you may have trans
     app.use(rubricScreen());                 // 403s sanctioned payers
     app.use(rubricScreen({ onMatch: log })); // or handle it yourself
 
-Fails open by design: if the list cannot be fetched, your revenue is not blocked.
+If a list refresh fails, screening continues against the last successfully fetched list. If no list has ever loaded, it fails open with an explicit `listUnavailable: true` flag so the degraded state is disclosed in the result. Either way, your revenue is not blocked.
 
 ## Optional: anchor the screening as evidence
 
