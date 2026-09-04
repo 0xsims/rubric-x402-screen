@@ -33,6 +33,12 @@ Screening protects you. Proving you screened is a different thing, and it is wha
     // proof.verifyUrl -> a Hedera-anchored record that you screened this address,
     //                    at this time, against this list version, verifiable by anyone.
 
+Or skip the account entirely and pay per attestation over x402 (half a cent, no signup):
+
+    const result = await screenPayer(addr);
+    const challenge = await attestScreening(result);           // returns the x402 payment challenge
+    const proof = await attestScreening(result, { payment });  // your signed payment -> anchored proof
+
 Free API key at https://rubric-protocol.com — 1,000 anchored screenings a month.
 
 ## Data source and your responsibility

@@ -11,6 +11,7 @@
 
 const LIST_URL = "https://rubric-protocol.com/data/ofac-addresses.json";
 const ATTEST_URL = "https://rubric-protocol.com/v1/tiered-attest";
+const ATTEST_X402_URL = "https://rubric-protocol.com/v1/x402/tiered-attest";
 const LIST_TTL_MS = 30 * 60 * 1000;
 
 export interface ScreenResult {
@@ -55,7 +56,33 @@ export async function screenPayer(address: string, opts: { listUrl?: string } = 
 }
 
 /** Anchor a screening as permanent, independently verifiable evidence. Needs a Rubric key. */
-export async function attestScreening(result: ScreenResult, opts: { apiKey: string; agentId?: string }) {
+export async function attestScreening(
+  result: ScreenResult,
+  opts: { apiKey?: string; agentId?: string; payment?: string } = {}
+) {
+  // No API key? Use the x402 path: pay per attestation, no account, no signup.
+  // Without a payment proof this returns the challenge for your wallet to sign.
+  if (!opts.apiKey) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (opts.payment) { headers["PAYMENT-SIGNATURE"] = opts.payment; headers["X-PAYMENT"] = opts.payment; }
+    const r = await fetch(ATTEST_X402_URL, {
+      method: "POST", headers,
+      body: JSON.stringify({ agentId: opts.agentId || "x402-payer-screen",
+        sourceId: "screen-" + result.address.slice(2, 14).toLowerCase() + "-" + Date.now(),
+        decision: "inbound-payer-screening", data: result }),
+    });
+    const j: any = await r.json().catch(() => ({}));
+    if (r.status === 200 && j.attestationId) {
+      return { attestationId: j.attestationId, verifyUrl: `https://rubric-protocol.com/v1/verify/${j.attestationId}`,
+               significance: "Anchored proof that this screening was performed at this time, verifiable by anyone without trusting you." };
+    }
+    return { attestationId: null, verifyUrl: null, paymentRequired: true, challenge: j,
+             how: "Sign this x402 payment with your wallet and call attestScreening again with { payment }. No account required." };
+  }
+  return attestWithKey(result, opts as { apiKey: string; agentId?: string });
+}
+
+async function attestWithKey(result: ScreenResult, opts: { apiKey: string; agentId?: string }) {
   const r = await fetch(ATTEST_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": opts.apiKey },
