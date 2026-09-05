@@ -14,9 +14,11 @@ const ATTEST_URL = "https://rubric-protocol.com/v1/tiered-attest";
 const ATTEST_X402_URL = "https://rubric-protocol.com/v1/x402/tiered-attest";
 const SCREEN_NAME_URL = "https://rubric-protocol.com/v1/x402/attested-screening";
 const LIST_TTL_MS = 30 * 60 * 1000;
+const MAX_LIST_AGE_MS = 24 * 60 * 60 * 1000; // never issue a verdict off a list older than this
 
 export interface ScreenResult {
   listUnavailable?: boolean;
+  reason?: "fetch_failed" | "list_stale";
   address: string;
   clear: boolean;
   ofacMatch: boolean;
@@ -34,16 +36,24 @@ interface ListPayload {
 
 let cache: { at: number; set: Map<string, string>; meta: ListPayload } | null = null;
 
-async function loadList(url = LIST_URL): Promise<typeof cache> {
-  if (cache && Date.now() - cache.at < LIST_TTL_MS) return cache;
+function isStaleMeta(meta: ListPayload, maxAge: number): boolean {
+  const t = Date.parse(meta.fetchedAt);
+  return !Number.isFinite(t) || Date.now() - t > maxAge;
+}
+
+async function loadList(url = LIST_URL, maxAge = MAX_LIST_AGE_MS): Promise<typeof cache> {
+  if (cache && Date.now() - cache.at < LIST_TTL_MS && !isStaleMeta(cache.meta, maxAge)) return cache;
   try {
     const r = await fetch(url);
     if (!r.ok) throw new Error(`sanctions list fetch failed: ${r.status}`);
     const meta = (await r.json()) as ListPayload;
     const set = new Map<string, string>();
     for (const a of meta.addresses || []) set.set(String(a.address).toLowerCase(), a.chain);
-    cache = { at: Date.now(), set, meta };
-    return cache;
+    const entry = { at: Date.now(), set, meta };
+    // A stale list is returned for disclosure but never cached as good,
+    // so one bad refresh cannot poison later calls within the TTL.
+    if (!isStaleMeta(meta, maxAge)) cache = entry;
+    return entry;
   } catch {
     if (cache) return cache; // refresh failed: serve last-known list
     return null;             // no list has ever loaded: caller fails open with disclosure
@@ -51,16 +61,23 @@ async function loadList(url = LIST_URL): Promise<typeof cache> {
 }
 
 /** Screen one address. Local, sub-millisecond after the first list load. */
-export async function screenPayer(address: string, opts: { listUrl?: string } = {}): Promise<ScreenResult> {
-  const list = await loadList(opts.listUrl);
-  if (!list) {
+export async function screenPayer(address: string, opts: { listUrl?: string; maxListAgeMs?: number } = {}): Promise<ScreenResult> {
+  const maxAge = opts.maxListAgeMs ?? MAX_LIST_AGE_MS;
+  const list = await loadList(opts.listUrl, maxAge);
+  const parsed = list ? Date.parse(list.meta.fetchedAt) : NaN;
+  const stale = !!list && (!Number.isFinite(parsed) || Date.now() - parsed > maxAge);
+  if (!list || stale) {
     return {
       address,
       clear: true,
       ofacMatch: false,
       listUnavailable: true,
+      reason: list ? "list_stale" : "fetch_failed",
+      ...(list ? { listFetchedAt: list.meta.fetchedAt } : {}),
       screenedAt: new Date().toISOString(),
-      disclaimer: "Sanctions list unreachable at screening time. This address was NOT screened. Failing open per documented design.",
+      disclaimer: list
+        ? "Sanctions list is older than the max accepted age. This address was NOT screened against it. Failing open per documented design."
+        : "Sanctions list unreachable at screening time. This address was NOT screened. Failing open per documented design.",
     } as unknown as ScreenResult;
   }
   const { set, meta } = list;
