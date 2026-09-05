@@ -212,7 +212,19 @@ export function rubricScreen(opts: {
       }
       return next();
     } catch {
-      return next(); // fail open: a screening outage must never block your revenue
+      // Fail open: a screening outage must never block your revenue.
+      // But disclose it the same way screenPayer does, so a caller
+      // logging screenings sees the miss instead of nothing.
+      (req as any).rubricScreening = {
+        address: null,
+        clear: true,
+        ofacMatch: false,
+        listUnavailable: true,
+        reason: "middleware_error",
+        screenedAt: new Date().toISOString(),
+        disclaimer: "Screening middleware errored. This request was NOT screened. Failing open per documented design.",
+      };
+      return next();
     }
   };
 }

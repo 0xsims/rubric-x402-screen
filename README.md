@@ -7,7 +7,7 @@ Screen the wallets that pay your x402 endpoints against OFAC. Free, local, sub-m
     const result = await screenPayer(payerAddress);
     if (!result.clear) return res.status(403).json({ error: "sanctioned counterparty" });
 
-That's it. The sanctions list is fetched once and matched in memory, so screening adds no network call to your payment path.
+That's it. The sanctions list is fetched once and matched in memory: no network call in your payment path after warm-up. A cold start, and the first call after each 30-minute refresh window, awaits one mirror fetch inline. The client verifies the list's age (24h max, configurable) but does not diff the mirror against Treasury; the sourceSha256 in every response is there so you can. One reviewer did, and it matched.
 
 ## Why this exists
 
@@ -61,7 +61,7 @@ A fuzzy name match is a candidate requiring human adjudication. It is not a find
 
 ## What this is and is not
 
-Free and local: address screening. Exact matching, no network call, no key.
+Free and local: address screening. Exact matching, no network call after warm-up, no key.
 
 Paid API: name screening, and anchoring any screening as evidence.
 
