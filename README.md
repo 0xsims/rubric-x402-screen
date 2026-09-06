@@ -73,10 +73,6 @@ The address list is a convenience mirror of the public OFAC SDN digital-currency
 
 Rubric does not warrant completeness or timeliness, and you remain solely responsible for your own sanctions compliance. This tool performs exact address matching against one public list. It is not a full compliance program.
 
-## License
-
-MIT (c) Echelon Intelligence Group LLC
-
 ## Screen who your agent pays (buyer side)
 
 The middleware above screens who pays you. `rubricBuyerGuard` screens who your agent is about to pay, wired into the official x402 client's `onBeforePaymentCreation` hook. One line, runs before any signature is created:
@@ -103,3 +99,7 @@ client.onBeforePaymentCreation(async (decl, ctx) => {
 ```
 
 Fail-open by default, same as the seller middleware: a list outage never blocks your agent, and the screening result discloses `listUnavailable` so the miss is on the record. Set `abortOnUnavailable: true` if unscreened spend is worse for you than a blocked request.
+
+## License
+
+MIT (c) Echelon Intelligence Group LLC

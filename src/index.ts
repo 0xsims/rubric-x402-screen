@@ -17,6 +17,11 @@ const LIST_TTL_MS = 30 * 60 * 1000;
 const MAX_LIST_AGE_MS = 24 * 60 * 60 * 1000; // never issue a verdict off a list older than this
 
 export interface ScreenResult {
+  /** True when no usable sanctions list was available and this address was
+   *  NOT screened. Pair with `reason` and `disclaimer` for the record. */
+  listUnavailable?: boolean;
+  /** Why screening did not run: "fetch_failed" | "list_stale" | "middleware_error". */
+  reason?: string;
   listUnavailable?: boolean;
   reason?: "fetch_failed" | "list_stale";
   address: string;
@@ -78,7 +83,7 @@ export async function screenPayer(address: string, opts: { listUrl?: string; max
       disclaimer: list
         ? "Sanctions list is older than the max accepted age. This address was NOT screened against it. Failing open per documented design."
         : "Sanctions list unreachable at screening time. This address was NOT screened. Failing open per documented design.",
-    } as unknown as ScreenResult;
+    };
   }
   const { set, meta } = list;
   const key = String(address).toLowerCase();
@@ -291,7 +296,7 @@ export function rubricBuyerGuard(opts: {
       return { abort: true,
         reason: "recipient appears on the OFAC SDN digital-currency address list" };
     }
-    if ((result as any).listUnavailable && opts.abortOnUnavailable) {
+    if (result.listUnavailable && opts.abortOnUnavailable) {
       return { abort: true,
         reason: "sanctions list unavailable and abortOnUnavailable is set - refusing unscreened payment" };
     }

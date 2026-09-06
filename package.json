@@ -1,7 +1,7 @@
 {
   "name": "rubric-x402-screen",
   "version": "0.5.0",
-  "description": "Screen the wallets that pay your x402 endpoints against OFAC. Free, local, sub-millisecond. Optionally anchor each screening as permanent evidence.",
+  "description": "OFAC screening for x402 payments, both directions: screen the wallets that pay your endpoints, and screen who your agent is about to pay before it signs. Free, local, sub-millisecond. Optionally anchor each screening as permanent evidence.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
