@@ -76,3 +76,30 @@ Rubric does not warrant completeness or timeliness, and you remain solely respon
 ## License
 
 MIT (c) Echelon Intelligence Group LLC
+
+## Screen who your agent pays (buyer side)
+
+The middleware above screens who pays you. `rubricBuyerGuard` screens who your agent is about to pay, wired into the official x402 client's `onBeforePaymentCreation` hook. One line, runs before any signature is created:
+
+```typescript
+import { rubricBuyerGuard } from "rubric-x402-screen";
+
+client.onBeforePaymentCreation(rubricBuyerGuard());
+```
+
+Sanctioned recipient: the payment aborts with a reason before signing. Clean recipient: nothing happens and your flow continues. Non-EVM recipients pass through unscreened.
+
+Compose it with your own spend policy:
+
+```typescript
+const screen = rubricBuyerGuard({
+  onScreened: (result, payTo) => log.info({ payTo, result }),
+});
+client.onBeforePaymentCreation(async (decl, ctx) => {
+  const s = await screen(decl, ctx);
+  if (s) return s;
+  // your network / asset / spend-cap checks
+});
+```
+
+Fail-open by default, same as the seller middleware: a list outage never blocks your agent, and the screening result discloses `listUnavailable` so the miss is on the record. Set `abortOnUnavailable: true` if unscreened spend is worse for you than a blocked request.
